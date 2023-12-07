@@ -55,11 +55,12 @@ def download_pdb(protein, identifier):
     if os.path.exists(file_path):
         print(f'Checked {protein}_{identifier}.pdb')
     else:
-        print(f'Downloading {protein}_{identifier}.pdb')
+        print(f'Downloading {protein}_{identifier}.pdb', end='   ')
         url = f'https://www.ebi.ac.uk/pdbe/entry-files/download/pdb{identifier}.ent'
         response = requests.get(url)
         with open(file_path, 'wb') as f:
             f.write(response.content)
+        print('Done')
 
     return file_path
 

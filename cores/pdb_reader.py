@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class Reader:
     def __init__(self, file_path, params):
         self.file_path = file_path
@@ -11,17 +12,9 @@ class Reader:
             region = [section['unp_start'], section['unp_end']]
             transform = section['residue_start'] - section['unp_start']
             if chain not in self.valid_sections.keys():
-                self.valid_sections[chain] = {'region':[region], 'transform':transform}
+                self.valid_sections[chain] = {'region': [region], 'transform': transform}
             else:
                 self.valid_sections[chain]['region'].append(region)
-
-
-    def get_identifier(self):
-        """with open(self.file_path, 'r') as file:
-            first_line = file.readline()
-            first_line = first_line.rstrip()
-            return first_line[-4:]"""
-        return self.file_path[-8:-4]
 
     def get_valid_sections(self):
         return self.valid_sections
@@ -38,7 +31,7 @@ class Reader:
                         is_in_region = False
                         regions = self.valid_sections[chain]['region']
                         for region in regions:
-                            if aa_coordinate > region[0] and aa_coordinate < region[1]:
+                            if region[0] < aa_coordinate < region[1]:
                                 is_in_region = True
                         if is_in_region:
                             if prev_aa_coord is not None and aa_coordinate - prev_aa_coord > 1:
@@ -54,11 +47,12 @@ class Reader:
                     gap_array[row, col] = -self.resolution
         for row in range(len(gaps.keys())):
             for section in gaps[list(gaps.keys())[row]]:
-                for col in range(section[0]-1-self.valid_sections[list(gaps.keys())[row]]['transform'], section[1]):
+                for col in range(section[0] - 1 - self.valid_sections[list(gaps.keys())[row]]['transform'], section[1]):
                     gap_array[row, col] = self.resolution
-        print('gap_array',gap_array)
-        print('gaps',gaps)
+        # print('gap_array', gap_array)
+        # print('gaps', gaps)
         return gap_array
+
     def get_resolution(self):
         resolution = None
         with open(self.file_path, 'r') as file:
