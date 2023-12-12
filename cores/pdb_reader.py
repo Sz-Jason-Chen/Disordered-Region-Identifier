@@ -20,35 +20,47 @@ class Reader:
         return self.valid_sections
 
     def get_potential_gaps(self, sequence):
-        prev_aa_coord = None
+        prev_aa_coord = 0
+        
         gaps = {}
         with open(self.file_path, 'r') as file:
             for line in file:
                 if line.startswith('ATOM'):
                     chain = line[21]
-                    aa_coordinate = int(line[23:26])
+                    aa_coordinate = int(line[22:26])
                     if chain in self.valid_sections.keys():
                         is_in_region = False
                         regions = self.valid_sections[chain]['region']
+                        transform = self.valid_sections[chain]['transform']
+                        # print('regions',regions)
                         for region in regions:
-                            if region[0] < aa_coordinate < region[1]:
+                            if region[0] + transform <= aa_coordinate <= region[1] + transform:
                                 is_in_region = True
                         if is_in_region:
+                            prev_aa_coord = max(prev_aa_coord, region[0] + transform)
                             if prev_aa_coord is not None and aa_coordinate - prev_aa_coord > 1:
                                 if chain not in gaps.keys():
                                     gaps[chain] = []
-                                gaps[chain].append([prev_aa_coord + 1, aa_coordinate - 1])
+                                gaps[chain].append([prev_aa_coord + 1 - transform, aa_coordinate - 1 - transform])
+                                
                             prev_aa_coord = aa_coordinate
         gap_array = np.zeros((len(self.valid_sections.keys()), len(sequence)))
-        for row in range(len(self.valid_sections.keys())):
-            valid_regions = self.valid_sections[list(self.valid_sections.keys())[row]]['region']
-            for v_region in valid_regions:
-                for col in range(v_region[0] - 1, v_region[1]):
-                    gap_array[row, col] = -self.resolution
-        for row in range(len(gaps.keys())):
-            for section in gaps[list(gaps.keys())[row]]:
-                for col in range(section[0] - 1 - self.valid_sections[list(gaps.keys())[row]]['transform'], section[1]):
-                    gap_array[row, col] = self.resolution
+        """for row in range(len(gap_array)):
+            for col in range(len(gap_array[0])):
+                gap_array[row, col] = 4 * self.resolution"""
+        # O43451
+        try:
+            for row in range(len(self.valid_sections.keys())):
+                valid_regions = self.valid_sections[list(self.valid_sections.keys())[row]]['region']
+                for v_region in valid_regions:
+                    for col in range(v_region[0] - 1, v_region[1]):
+                        gap_array[row, col] = -self.resolution
+            for row in range(len(gaps.keys())):
+                for section in gaps[list(gaps.keys())[row]]:
+                    for col in range(section[0] - 1, section[1]):
+                        gap_array[row, col] = self.resolution
+        except IndexError:
+            return np.zeros((len(self.valid_sections.keys()), len(sequence)))
         # print('gap_array', gap_array)
         # print('gaps', gaps)
         return gap_array
@@ -79,7 +91,7 @@ class AlphaFoldReader:
         with open(self.file_path, 'r') as file:
             for line in file:
                 if line.startswith('ATOM'):
-                    aa_coordinate = int(line[23:26])
+                    aa_coordinate = int(line[22:26])
                     score = float(line[61:66])
                     if aa_coordinate > prev_aa_coordinate:
                         scores.append(score)

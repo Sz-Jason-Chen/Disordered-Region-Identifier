@@ -19,6 +19,9 @@ def main():
     print('This section will access the Uniprot server and will automatically retry if access fails.')
     print('If it stuck for more than 1 minute, please restart the programme and check the internet connection.')
     sequence = get_amino_sequence(protein)  # AA sequence
+    if sequence is None:
+        print('No available protein sequence.')
+        return -1
     print(f'Amino acid sequence length: {len(sequence)}')
     # get all structure files
     print('Accessing PDB files')
@@ -45,10 +48,11 @@ def main():
             resolution = reader.get_resolution()
             # ignore structure without resolution (cannot be scored)
             if resolution:
+                gap_array = reader.get_potential_gaps(sequence=sequence)
                 if gaps_matrices is not None:
-                    gaps_matrices = np.vstack((gaps_matrices, reader.get_potential_gaps(sequence=sequence)))
+                    gaps_matrices = np.vstack((gaps_matrices, gap_array))
                 else:
-                    gaps_matrices = reader.get_potential_gaps(sequence=sequence)
+                    gaps_matrices = gap_array
                 valid_sections.append(reader.get_valid_sections())
 
     #print(gaps_matrices)
