@@ -4,12 +4,13 @@ from matplotlib.patches import Rectangle
 import numpy as np
 import seaborn as sns
 import pandas as pd
+from sklearn.metrics import roc_curve, auc
+
 
 
 def main():
-    print("Protein Disordered Region Identifier")
+    print("█▓▒░ D I S O R D E R E D - R E G I O N - I D E N T I F I E R ░▒▓█")
     print("By Group 2")
-
     print('========================================')
     protein = input('Enter protein: ')
 
@@ -79,6 +80,7 @@ def main():
     table = pd.DataFrame(final_matrix, index=['Score', 'AlphaFold'])
     # Convert table from index 0 to index 1
     table = table.rename(columns=dict(zip(table.columns, table.columns + 1)))
+    print(table)
 
     gap_positions = []
     start = 0
@@ -110,6 +112,8 @@ def main():
             gap_positions.append({'start': len(sequence), 'end': len(sequence), 'avg_score': value, 'af_avg_score':table.loc['AlphaFold', column_name]})
     # print(gap_positions)
 
+
+
     if len(gap_positions) > 0:
         print(f'{len(gap_positions)} gaps are identified.')
         print('The gaps and their average position scores are listed:')
@@ -127,6 +131,34 @@ def main():
     plt.title(f'{protein}   (n={len(gaps_matrices)})')
     plt.show()
 
+
+
+
+
+    ###Draw ROC curve to estimate the efficiency of our model
+    # extract Score and AlphaFold score
+    score_column = table.loc['Score']
+    alphafold_score_column = table.loc['AlphaFold']
+
+    # use AlphaFold_Score as True Class Labels，Score as the input of models, 30 is determined by 1-70(70 is the threshold of high evidence in pLDDT)
+    y_true = (alphafold_score_column > 30).astype(int)
+    y_scores = score_column
+
+    # use roc_curve to calculate the roc results
+    fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+    roc_auc = auc(fpr, tpr)
+
+    # draw ROC curve
+    plt.figure(figsize=(8, 8))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'AUC = {roc_auc:.2f}')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random', alpha=0.5)
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
     return 0
 
 if __name__ == '__main__':
