@@ -4,6 +4,9 @@ from cores import *
 from scipy.interpolate import make_interp_spline
 
 
+print("█▓▒░ D I S O R D E R E D  R E G I O N  I D E N T I F I E R ( IUPred  VERSION )░▒▓█")
+print("By Group 2")
+print('========================================')
 
 UID=input("Please input accesssion number for iuPred scoring: \n (If you want to see IUPred3 scores, please input 'P06400', 'Q7L5Y9', 'Q15326', or 'Q92793'):\n")
 # Set example test data
