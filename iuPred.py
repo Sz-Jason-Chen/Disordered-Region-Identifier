@@ -1,22 +1,18 @@
 import numpy as np
-import pandas as pd
-import statistics
 import matplotlib.pyplot as plt
-import re
-import string
-import math
 from cores import *
 from scipy.interpolate import make_interp_spline
-from matplotlib.patches import Rectangle
 
+
+
+UID=input("Please input accesssion number for iuPred scoring: \n (If you want to see IUPred3 scores, please input 'P06400', 'Q7L5Y9', 'Q15326', or 'Q92793'):\n")
 # Set example test data
 def example(UID):
         """
         :param UID: Accession number of Uniprot database, should be 'P06400', 'Q7L5Y9', 'Q15326', or 'Q92793'.
         :return: 
         """
-        global aa_seq
-        global IUP_ref
+        
         aa_seq=get_amino_sequence(UID)
         if UID=="Q92793":
             IUP_ref=np.array([  0.8478501627834398,
@@ -4396,6 +4392,7 @@ def example(UID):
     ])
         else:
             print("The input of example function should be 'P29590', 'P06400', 'Q7L5Y9', 'Q15326', or 'Q92793'. ")
+        return aa_seq,IUP_ref
 # input: String: 'P06400', 'Q7L5Y9', 'Q15326', or 'Q92793'
 # output: A comparasion plot between our score and IUPred3 score. Sites with score larger than 0.5
 #         are considered disordered.
@@ -4450,8 +4447,11 @@ def iuPred(UID="Q92793"):
         "VAL": "V",
     }
     aa_name=["A", "C", "D", "E", "F", "G", "H", "I", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
-
-    example(UID)
+    if UID in ['P06400', 'Q7L5Y9', 'Q15326', 'Q92793']:
+        aa_seq,IUP_ref=example(UID)
+    else:
+        
+        aa_seq=get_amino_sequence(UID)
 
     # Use amino acid interaction energy matrix to predict probability of every site to be disorder.
     scores=[]
@@ -4483,6 +4483,18 @@ def iuPred(UID="Q92793"):
         
     pred_scores=scores
 
+    positions={"start":[],"end":[]}
+    for i in range(len(pred_scores)-2):
+        if pred_scores[i]>0.5 and pred_scores[i+1]>0.5 and pred_scores[i+2]>0.5:
+            start=i
+            end=i
+            for a in range(i+1,len(pred_scores)):
+                if pred_scores[a]>0.5:
+                    end=a
+                else:
+                    positions["start"].append(start)
+                    positions["end"].append(end) 
+    
 
     # Smooth our scores and compare with IUPred3 score
     # sites with score > 0.5 are considered disordered
@@ -4491,14 +4503,14 @@ def iuPred(UID="Q92793"):
     y1_smooth = make_interp_spline(range(1,len(pred_scores)+1), pred_scores)(x_smooth)
     y1_smooth=[1 if x > 1 else x for x in y1_smooth]
     y1_smooth=[0 if x < 0 else x for x in y1_smooth]
-    print(y1_smooth)
+    
         # plot curve 1
     line1=plt.plot(x_smooth, y1_smooth, 'b--',label="Our Score")
-
-    y2_smooth = make_interp_spline(range(1,len(IUP_ref)+1), IUP_ref)(x_smooth)
-    y2_smooth=[1 if x > 1 else x for x in y2_smooth]
-    y2_smooth=[0 if x < 0 else x for x in y2_smooth]
-    line2=plt.plot(x_smooth, y2_smooth, 'r-',label="IUPred3 Score")
+    if UID in ['P06400', 'Q7L5Y9', 'Q15326', 'Q92793']:
+        y2_smooth = make_interp_spline(range(1,len(IUP_ref)+1), IUP_ref)(x_smooth)
+        y2_smooth=[1 if x > 1 else x for x in y2_smooth]
+        y2_smooth=[0 if x < 0 else x for x in y2_smooth]
+        line2=plt.plot(x_smooth, y2_smooth, 'r-',label="IUPred3 Score")
     plt.legend(loc="best")
     plt.ylim(0, 1)
     plt.xlabel("Amino Acid Site")
@@ -4506,127 +4518,40 @@ def iuPred(UID="Q92793"):
     plt.title(UID)
     plt.axhline(y=0.5, color='red')
     plt.show()
+    print(UID+" gaps: ") 
+    start=positions["start"][0]
+    end=positions["end"][0]
+    pos_res={"Start":[start],"End":[end]}
+    # print(pred_scores)
+    for i in range(len(positions["start"])):
+        if positions["start"][i]==start:
+            if positions["end"][i]<=end+1:
+                end=positions["end"][i]
 
-iuPred('P06400')
-
-
-""" def draw_IUPred3(protein):
+        else:
+            pos_res["Start"].append(start)
+            pos_res["End"].append(end)
+            start=positions["start"][i]
+            end=positions["end"][i]
     
-    sequence = get_amino_sequence(protein)  # AA sequence
-    if sequence is None:
-        print('No available protein sequence.')
-        return -1
+    start=pos_res["Start"][0]
+    end=pos_res["End"][0]
+    Pos_Res={"Start":[start],"End":[end]}
     
-    # get all structure files
-    print('Accessing PDB files')
-    pdb_params = get_pdb_params(protein=protein)
-    file_paths = access_protein_files(protein=protein)
-    print('File validation complete')
-
-    print('----------------------------------------')
-    print('Identifying gaps')
-    valid_sections = []
-    af_score = None  # AF score (100 - pLDDT)
-    gaps_matrices = None
-    # read every structure files
-    for path in file_paths:
-        # AF file
-        if path.split('.')[-2][-9:] == 'alphafold':
-            print(f'Resolving AlphaFold file')
-            alpha_fold_reader = AlphaFoldReader(file_path=path)
-            af_score = 100 - np.array(alpha_fold_reader.get_scores())  # 100 - pLDDT
-        # real measurement files
-        elif path.split('.')[-2][-9:] != 'alphafold':
-            print(f'Examining {path[-8:-4].upper()} file')
-            reader = Reader(file_path=path, params=pdb_params[path.split('.')[-2][-4:]])
-            resolution = reader.get_resolution()
-            # ignore structure without resolution (cannot be scored)
-            if resolution:
-                gap_array = reader.get_potential_gaps(sequence=sequence)
-                if gaps_matrices is not None:
-                    gaps_matrices = np.vstack((gaps_matrices, gap_array))
-                else:
-                    gaps_matrices = gap_array
-                valid_sections.append(reader.get_valid_sections())
-
-    #print(gaps_matrices)
-
-    # testing outputs
-    print('----------------------------------------')
-    print('Scoring')
-    if gaps_matrices is None:
-        print('No available PDB file for gap identification.')
-        return 1
-    # scoring
-    # score_matrix = multi_chain_scoring(identifiers=identifiers, sequence=sequence, resolutions=resolutions, gaps=gaps, valid_sections=valid_sections, pdb_params=pdb_params)
-    score_matrix = scoring(gaps_matrices=gaps_matrices)
-    #print(score_matrix)
-
-
-    print('----------------------------------------')
-    print('Result')
     
-    # merge the score with the AF prediction
-    final_matrix = np.vstack((score_matrix, af_score))
-    table = pd.DataFrame(final_matrix, index=['Score', 'AlphaFold'])
-    # Convert table from index 0 to index 1
-    table = table.rename(columns=dict(zip(table.columns, table.columns + 1)))
+    for i in range(len(pos_res["Start"])):
 
-    table.loc[2]=IUP_ref*100
-    print(table.shape[1])
-    print(len(IUP_ref))
-    gap_positions = []
-    start = 0
-    avg_score = 0
-    af_avg_score = 0
-    for column_name, value in table.loc['Score'].items():
-        if value >= 50 and start == 0:
-            start = column_name
-            avg_score = value
-            af_avg_score = table.loc['AlphaFold', column_name]
-        elif value >= 50 and start != 0 and column_name != len(sequence):
-            avg_score += value
-            af_avg_score += table.loc['AlphaFold', column_name]
-        elif value < 50 and start != 0:
-            end = column_name - 1
-            avg_score /= end - start + 1
-            af_avg_score /= end - start + 1
-            gap_positions.append({'start': start, 'end': end, 'avg_score': avg_score, 'af_avg_score':af_avg_score})
-            start = 0
-            af_avg_score = 0
-        elif value >= 50 and start != 0 and column_name == len(sequence):
-            end = len(sequence)
-            avg_score += value
-            af_avg_score += table.loc['AlphaFold', column_name]
-            avg_score /= end - start + 1
-            af_avg_score /= end - start + 1
-            gap_positions.append({'start': start, 'end': end, 'avg_score': avg_score, 'af_avg_score':af_avg_score})
-        elif value >= 50 and start == 0 and column_name == len(sequence):
-            gap_positions.append({'start': len(sequence), 'end': len(sequence), 'avg_score': value, 'af_avg_score':table.loc['AlphaFold', column_name]})
-    # print(gap_positions)
-
-
-
-    if len(gap_positions) > 0:
-        print(f'{len(gap_positions)} gaps are identified.')
-        print('The gaps and their average position scores are listed:')
-        for gap in gap_positions:
-            print(f'Start: {gap["start"]},\tEnd: {gap["end"]},\tAvg score: {round(gap["avg_score"], 2)},\tAF avg score: {round(gap["af_avg_score"], 2)}')
+        if pos_res["End"][i]!=end:
+            
+            Pos_Res["End"].append(pos_res["End"][i])
+            Pos_Res["Start"].append(pos_res["Start"][i])
+        start=pos_res["Start"][i]
+        end=pos_res["End"][i]
+    if len(Pos_Res["Start"])-1==0:
+        print("No gaps are found in "+UID+".")
     else:
-        print('No gap identified')
-
-    print('The heatmap presents each position\'s score, and the gap regions are marked with red boxes.')
-    # heatmap output
-    sns.heatmap(table, cmap='viridis', vmin=0, vmax=100)
-    for gap in gap_positions:
-        rectangle = Rectangle((gap["start"], 0), width=(gap["end"]-gap["start"]+1), height=2, linewidth=1, edgecolor='red', facecolor='none')
-        plt.gca().add_patch(rectangle)
-    plt.title(f'{protein}   (n={len(gaps_matrices)})')
-    plt.show()
+        for i in range(len(Pos_Res["Start"])):
+            print(f"start: {Pos_Res['Start'][i]}, end: {Pos_Res['End'][i]}") 
     
-    return 0
-
-
-draw_IUPred3('P06400') """
-
+iuPred(UID)
 
