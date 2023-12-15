@@ -7,9 +7,8 @@ import pandas as pd
 from sklearn.metrics import roc_curve, auc
 
 
-
 def main():
-    print("█▓▒░ D I S O R D E R E D - R E G I O N - I D E N T I F I E R ░▒▓█")
+    print("█▓▒░ DISORDERED REGION IDENTIFIER ░▒▓█")
     print("By Group 2")
     print('========================================')
     protein = input('Enter protein: ')
@@ -17,8 +16,8 @@ def main():
     print('----------------------------------------')
     print('Accessing sources')
     print('Reminder:')
-    print('This section will access the Uniprot server and will automatically retry if access fails.')
-    print('If it stuck for more than 1 minute, please restart the programme and check the internet connection.')
+    print('(This section will access the Uniprot server and will automatically retry if access fails.')
+    print('If it stuck for more than 2 minute, please restart the programme and check the internet connection.)')
     sequence = get_amino_sequence(protein)  # AA sequence
     if sequence is None:
         print('No available protein sequence.')
@@ -56,8 +55,6 @@ def main():
                     gaps_matrices = gap_array
                 valid_sections.append(reader.get_valid_sections())
 
-    #print(gaps_matrices)
-
     # testing outputs
     print('----------------------------------------')
     print('Scoring')
@@ -67,89 +64,90 @@ def main():
     # scoring
     # score_matrix = multi_chain_scoring(identifiers=identifiers, sequence=sequence, resolutions=resolutions, gaps=gaps, valid_sections=valid_sections, pdb_params=pdb_params)
     score_matrix = scoring(gaps_matrices=gaps_matrices)
-    #print(score_matrix)
-
+    # print(score_matrix)
 
     print('----------------------------------------')
     print('Result')
-    """location = np.where(score_matrix > 50)[0]
-    print(location)
-    """
     # merge the score with the AF prediction
     final_matrix = np.vstack((score_matrix, af_score))
     table = pd.DataFrame(final_matrix, index=['Score', 'AlphaFold'])
     # Convert table from index 0 to index 1
     table = table.rename(columns=dict(zip(table.columns, table.columns + 1)))
-    print(table)
+    # print(table)
 
-    gap_positions = []
-    start = 0
-    avg_score = 0
-    af_avg_score = 0
+    # For positions whose scores larger than criterion(48), they are consider in a disordered region
+    # The adjacent positions form a disordered region
+    disordered_regions = []
+    start = 0  # start position of a disordered region
+    avg_score = 0  # average scores of positions in a region
+    af_avg_score = 0  # average AlphaFold scores of positions in a region
+    gap_criterion = 48  # threshold of whether a position will be considered in a region
     for column_name, value in table.loc['Score'].items():
-        if value >= 50 and start == 0:
+        # high score and no recording region
+        if value >= gap_criterion and start == 0:
             start = column_name
             avg_score = value
             af_avg_score = table.loc['AlphaFold', column_name]
-        elif value >= 50 and start != 0 and column_name != len(sequence):
+        # high score and have recording region and no reach seq end
+        elif value >= gap_criterion and start != 0 and column_name != len(sequence):
             avg_score += value
             af_avg_score += table.loc['AlphaFold', column_name]
-        elif value < 50 and start != 0:
+        # low score and have recording region
+        elif value < gap_criterion and start != 0:
             end = column_name - 1
             avg_score /= end - start + 1
             af_avg_score /= end - start + 1
-            gap_positions.append({'start': start, 'end': end, 'avg_score': avg_score, 'af_avg_score':af_avg_score})
+            disordered_regions.append(
+                {'start': start, 'end': end, 'avg_score': avg_score, 'af_avg_score': af_avg_score})
             start = 0
             af_avg_score = 0
-        elif value >= 50 and start != 0 and column_name == len(sequence):
+        # high score and have recording region and reach seq end
+        elif value >= gap_criterion and start != 0 and column_name == len(sequence):
             end = len(sequence)
             avg_score += value
             af_avg_score += table.loc['AlphaFold', column_name]
             avg_score /= end - start + 1
             af_avg_score /= end - start + 1
-            gap_positions.append({'start': start, 'end': end, 'avg_score': avg_score, 'af_avg_score':af_avg_score})
-        elif value >= 50 and start == 0 and column_name == len(sequence):
-            gap_positions.append({'start': len(sequence), 'end': len(sequence), 'avg_score': value, 'af_avg_score':table.loc['AlphaFold', column_name]})
-    # print(gap_positions)
+            disordered_regions.append(
+                {'start': start, 'end': end, 'avg_score': avg_score, 'af_avg_score': af_avg_score})
+        # high score and no recording region and reach seq end
+        elif value >= gap_criterion and start == 0 and column_name == len(sequence):
+            disordered_regions.append({'start': len(sequence), 'end': len(sequence), 'avg_score': value,
+                                       'af_avg_score': table.loc['AlphaFold', column_name]})
 
-
-
-    if len(gap_positions) > 0:
-        print(f'{len(gap_positions)} gaps are identified.')
+    # disordered region parameters output
+    if len(disordered_regions) > 0:
+        print(f'{len(disordered_regions)} gaps are identified.')
         print('The gaps and their average position scores are listed:')
-        for gap in gap_positions:
-            print(f'Start: {gap["start"]},\tEnd: {gap["end"]},\tAvg score: {round(gap["avg_score"], 2)},\tAF avg score: {round(gap["af_avg_score"], 2)}')
+        for gap in disordered_regions:
+            print(
+                f'Start: {gap["start"]},\tEnd: {gap["end"]},\tAvg score: {round(gap["avg_score"], 2)},\tAF avg score: {round(gap["af_avg_score"], 2)}')
     else:
         print('No gap identified')
 
     print('The heatmap presents each position\'s score, and the gap regions are marked with red boxes.')
     # heatmap output
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
     sns.heatmap(table, cmap='viridis', vmin=0, vmax=100)
-    for gap in gap_positions:
-        rectangle = Rectangle((gap["start"], 0), width=(gap["end"]-gap["start"]+1), height=2, linewidth=1, edgecolor='red', facecolor='none')
+    for gap in disordered_regions:
+        rectangle = Rectangle((gap["start"], 0), width=(gap["end"] - gap["start"] + 1), height=2, linewidth=1,
+                              edgecolor='red', facecolor='none')
         plt.gca().add_patch(rectangle)
     plt.title(f'{protein}   (n={len(gaps_matrices)})')
-    plt.show()
 
-
-
-
-
-    ###Draw ROC curve to estimate the efficiency of our model
+    # Draw ROC curve to estimate the efficiency of our model
     # extract Score and AlphaFold score
     score_column = table.loc['Score']
     alphafold_score_column = table.loc['AlphaFold']
-
     # use AlphaFold_Score as True Class Labels，Score as the input of models, 30 is determined by 1-70(70 is the threshold of high evidence in pLDDT)
     y_true = (alphafold_score_column > 30).astype(int)
     y_scores = score_column
-
-    # use roc_curve to calculate the roc results
+    # calculate the roc results
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
     roc_auc = auc(fpr, tpr)
-
     # draw ROC curve
-    plt.figure(figsize=(8, 8))
+    plt.subplot(1, 2, 2)
     plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'AUC = {roc_auc:.2f}')
     plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random', alpha=0.5)
     plt.xlabel('False Positive Rate')
@@ -158,8 +156,9 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.show()
-    
+
     return 0
+
 
 if __name__ == '__main__':
     main()
